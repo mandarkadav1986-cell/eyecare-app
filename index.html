@@ -221,7 +221,9 @@
         // We will now use the Gemini API.
 
         // --- GEMINI API CONFIG ---
-        const apiKey = ""; // Leave as-is, it will be handled by the environment
+        // 3. PASTE YOUR NEW KEY HERE
+        // You MUST replace the placeholder text with your own Google AI API Key
+        const apiKey = "AIzaSyAdHwF9hszyOdKn_Dj8plj_PANvAIuK9FM"; 
         const genAIApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
         // This is the most important part for safety and persona.
@@ -390,6 +392,12 @@
          * Fetches a response from the Gemini API.
          */
         async function getAIResponse(userQuery) {
+            // Check if the API key is still the placeholder
+            if (apiKey === "PASTE_YOUR_GOOGLE_AI_API_KEY_HERE") {
+                console.error("API Key is not set.");
+                return { text: "I'm sorry, my AI service is not configured. Please contact the administrator. (Error: API_KEY_MISSING)", sources: [] };
+            }
+
             // [FIX] Moved systemPrompt definition inside the function.
             // This prevents any potential [GLOBAL] parsing errors related
             // to this large template literal.
@@ -405,18 +413,24 @@ You are an AI-powered EyeCare Triage Assistant. Your role is to provide helpful,
 
 You **MUST** follow this multi-step process:
 
-**STEP 1: GATHER INFORMATION**
+**STEP 1: GATHER INITIAL INFORMATION**
 When the user provides their **initial symptom** (e.g., "my eye is red and itchy"), do **NOT** give an answer or explanation immediately.
-Instead, you **MUST** begin asking a series of follow-up questions to gather more information. Ask these questions **one at a time**.
+Instead, you **MUST** respond by asking **exactly three follow-up questions** in a single message to gather more information.
 
-Your questions must cover these key areas:
-* **Onset, Duration, and Progress:** (e.g., "I'm sorry to hear that. When did this redness start?", "Has it been constant or does it come and go?", "Have you noticed it getting better or worse?")
-* **Specifics of the Symptom:** (e.g., "Is there any pain or just itching?", "Is there any discharge? What color?", "Is your vision blurry?")
-* **Relevant Eye History:** (e.g., "Do you wear contact lenses?", "Have you had any eye injuries or surgeries in the past?", "Do you have any known eye conditions?")
-* **Relevant Systemic History:** (e.g., "Do you have any general health conditions I should be aware of, like diabetes, high blood pressure, or allergies?", "Are you taking any new medications?")
+For example, your response should be something like:
+"I'm sorry to hear that. To help me understand, could you please tell me:
+1.  When did this redness start and has it been getting better or worse?
+2.  Is there any pain, itching, or discharge?
+3.  Do you wear contact lenses or have any known allergies?"
 
-**STEP 2: SUMMARIZE AND ANSWER**
-**Only after** you have gathered sufficient information from the user in those categories, you will then provide a final summary.
+Your **three** questions should be designed to gather key information about:
+* **Onset, Duration, and Progress**
+* **Specifics of the Symptom** (pain, discharge, vision changes)
+* **Key Relevant History** (contacts, allergies, injury)
+
+**STEP 2: CONTINUE GATHERING & SUMMARIZE**
+After the user answers your first three questions, you can ask more follow-up questions **one at a time** if needed (e.g., "Thanks. You mentioned discharge, what color is it?").
+**Only after** you have gathered sufficient information, you will then provide a final summary.
 
 This summary MUST:
 1.  Start by summarizing the key symptoms the user told you (e.g., "Okay, so just to confirm, you've had a red, itchy right eye for two days, it's watery, and you recently started a new allergy medication.")
@@ -639,3 +653,6 @@ This summary MUST:
     </script>
 </body>
 </html>
+
+
+
