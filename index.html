@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EyeCare Assistant</title>
+    
+    <!-- 1. Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Embedded Web App Manifest for PWA "Install" functionality -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkV5ZUNhcmUgQXNzaXN0YW50IiwKICAic2hvcnRfbmFtZSI6ICJFeWVDYXJlIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNmN2ZhZmMiLAogICJ0aGVtZV9jb2xvciI6ICIjMmI2N2UzIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9wbGFjZWhvbGQuYm8vMTkyeDE5Mi8yYjY3ZTMvRkZGRkZGP3RleHQ9RWV5ZSIsCiAgICAgICJzaXplcyI6ICIxOTJ4MTkyIiwKICAgICAgInR5cGUiOiAiaW1lZ2UvcG5nIiwKICAgICAgInB1cnBvc2UiOiAiYW55IG1hc2thYmxlIgogICAgfSwKICAgIHsKICAgICAgInNyYyI6ICJodHRwczovL3BsYWNlaG9sZC5jby81MTJ4NTEyLzJiNjdlMy9GRkZGRkY/dGV4dD1FZXllIiwKICAgICAgInNpemVzIjogIjUxMng1MTIiLAogICAgICAidHlwZSI6ICJpbWFnZS9wbmciLAogICAgICAicHVycG9zZSI6ICJhbnkgbWFza2FibGUiCiAgICB9CiAgXQp9">
+
+    <!-- 3. Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            getDoc, 
+            setDoc,
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Make Firebase functions globally accessible for our script
+        window.firebase = {
+            initializeApp,
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged,
+            getFirestore,
+            doc,
+            getDoc,
+            setDoc,
+            setLogLevel
+        };
+    </script>
+
+    <!-- 4. Custom Styles and Font -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+        }
+        
+        /* Simple page transition */
+        .page {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Styling for the active bottom nav button */
+        .nav-btn.active {
+            color: #2b67e3; /* Tailwind's blue-600 */
+        }
+
+        /* Custom scrollbar for chat */
+        .chat-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 20px;
+        }
+
+        /* Loading indicator styles */
+        .loading-dot {
+            animation: bounce 1s infinite;
+        }
+        .loading-dot:nth-child(2) { animation-delay: 0.1s; }
+        .loading-dot:nth-child(3) { animation-delay: 0.2s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+
+        /* Ensure links in chat are styled */
+        .chat-message a {
+            color: #2563eb;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+
+    <!-- Main App Container -->
+    <div id="app" class="max-w-lg mx-auto bg-white min-h-screen shadow-2xl flex flex-col relative">
+
+        <!-- App Header -->
+        <header class="bg-gradient-to-r from-blue-600 to-blue-500 text-white p-4 shadow-md flex items-center space-x-3 sticky top-0 z-10">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+            <h1 class="text-2xl font-bold">EyeCare Assistant</h1>
+        </header>
+
+        <!-- Page Content Area -->
+        <main id="page-content" class="flex-grow p-4 overflow-y-auto pb-20">
+
+            <!-- ======================= -->
+            <!-- PATIENT DETAILS PAGE    -->
+            <!-- ======================= -->
+            <div id="login-page" class="page space-y-6">
+                <h2 class="text-2xl font-bold text-gray-800">Patient Details</h2>
+                <p class="text-gray-600">
+                    Please enter your details to get started.
+                </p>
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label for="patient-name" class="block text-sm font-medium text-gray-700">Full Name</label>
+                        <input type="text" id="patient-name" name="patient-name" required
+                               class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="patient-mobile" class="block text-sm font-medium text-gray-700">Mobile Number</label>
+                        <input type="tel" id="patient-mobile" name="patient-mobile" required
+                               class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    
+                    <p id="login-error" class="text-sm text-red-600"></p>
+
+                    <button type="submit" 
+                            class="w-full bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center">
+                        Continue
+                    </button>
+                </form>
+            </div>
+
+            <!-- ======================= -->
+            <!-- HOME PAGE               -->
+            <!-- ======================= -->
+            <div id="home" class="page space-y-6 hidden"> <!-- Now hidden by default -->
+                <h2 class="text-2xl font-bold text-gray-800">Welcome!</h2>
+                <p class="text-gray-600">
+                    I'm your virtual EyeCare Assistant. I'm here to help you understand eye symptoms.
+                </p>
+
+                <!-- Disclaimer Card -->
+                <div class="bg-red-50 border-l-4 border-red-500 text-red-800 p-4 rounded-lg shadow-md" role="alert">
+                    <h3 class="font-bold text-lg">IMPORTANT MEDICAL DISCLAIMER</h3>
+                    <p class="mt-2">
+                        I am an AI assistant, not a doctor. The information I provide is for educational purposes only and is
+                        <strong>not a substitute for professional medical advice, diagnosis, or treatment.</strong>
+                    </p>
+                    <p class="mt-2 font-semibold">
+                        If you are experiencing a medical emergency, please call 8447877301.
+                    </p>
+                </div>
+
+                <div class="pt-4">
+                    <button onclick="showPage('symptom-checker')" class="w-full bg-blue-600 text-white font-semibold py-4 px-6 rounded-lg shadow-lg hover:bg-blue-700 transition duration-300 text-left flex items-center justify-between">
+                        <div>
+                            <h4 class="text-lg">Start Symptom Checker</h4>
+                            <p class="font-normal text-sm">Ask me about your symptoms.</p>
+                        </div>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ======================= -->
+            <!-- SYMPTOM CHECKER PAGE    -->
+            <!-- ======================= -->
+            <!-- Updated layout to be a full-height flex column -->
+            <div id="symptom-checker" class="page hidden flex flex-col h-[calc(100vh-170px)]">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4 shrink-0">AI Symptom Checker</h2>
+                
+                <!-- Chat container, set to grow and scroll -->
+                <div id="chat-container" class="chat-container bg-gray-50 flex-grow rounded-lg shadow-inner overflow-y-auto p-4 space-y-4">
+                    <!-- Chat messages will be dynamically inserted here -->
+                </div>
+                
+                <!-- Chat input form -->
+                <form id="chat-form" class="mt-4 flex space-x-2 shrink-0">
+                    <input type="text" id="chat-input" placeholder="Describe your symptoms..." class="flex-grow w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" autocomplete="off" required>
+                    <button type="submit" class="bg-blue-600 text-white p-3 rounded-lg shadow hover:bg-blue-700 transition duration-300 flex-shrink-0">
+                        <!-- Send Icon -->
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                </form>
+            </div>
+
+        </main>
+
+        <!-- ======================= -->
+        <!-- BOTTOM NAVIGATION       -->
+        <!-- ======================= -->
+        <!-- Added id="bottom-nav" and class="hidden" -->
+        <nav id="bottom-nav" class="bg-white border-t border-gray-200 w-full max-w-lg mx-auto fixed bottom-0 z-10 grid grid-cols-2 hidden">
+            <button data-page="home" class="nav-btn p-4 flex flex-col items-center justify-center text-gray-600 hover:bg-gray-50 active">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6-4a1 1 0 001-1v-1a1 1 0 10-2 0v1a1 1 0 001 1z"></path></svg>
+                <span class="text-xs font-medium">Home</span>
+            </button>
+            <button data-page="symptom-checker" class="nav-btn p-4 flex flex-col items-center justify-center text-gray-600 hover:bg-gray-50">
+                <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m14 0a7 7 0 00-14 0m14 0H5m14 0v4m0 0a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4m0 0a2 2 0 00-2-2h-2a2 2 0 00-2 2v4m0 0a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m0 0V5a2 2 0 012-2h10a2 2 0 012 2v2"></path></svg>
+                <span class="text-xs font-medium">Symptom Check</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- ======================= -->
+    <!-- JAVASCRIPT LOGIC          -->
+    <!-- ======================= -->
+    <script>
+        // --- DATA ---
+        
+        // The static question tree has been removed.
+        // We will now use the Gemini API.
+
+        // --- GEMINI API CONFIG ---
+        const apiKey = ""; // Leave as-is, it will be handled by the environment
+        const genAIApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        // This is the most important part for safety and persona.
+        // [FIX] Moved this const from the global scope to inside the getAIResponse function.
+        // A [GLOBAL] SyntaxError can sometimes be caused by the browser's parser
+        // struggling with a very large template literal in the global scope.
+        /*
+        const systemPrompt = `
+...
+`;
+        */
+        
+        // --- FIREBASE & APP STATE ---
+        let app, auth, db;
+        let userId;
+        
+        // 1. Set your App ID here. Make it a simple, unique string.
+        // (This replaces the need for the __app_id global variable)
+        const appId = 'my-eyecare-app'; // <-- Set based on your projectId
+
+
+        // --- APP LOGIC ---
+
+        // DOM Element Selectors
+        const pages = document.querySelectorAll('.page');
+        const navButtons = document.querySelectorAll('.nav-btn');
+        const chatContainer = document.getElementById('chat-container');
+        const chatForm = document.getElementById('chat-form');
+        const chatInput = document.getElementById('chat-input');
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+        const bottomNav = document.getElementById('bottom-nav');
+        
+        let chatHistory = []; // Stores the conversation
+        let chatInitialized = false; // Tracks if the welcome message has been sent
+
+        /**
+         * Page Navigation
+         */
+        function showPage(pageId) {
+            pages.forEach(page => page.classList.add('hidden'));
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.remove('hidden');
+            }
+            
+            navButtons.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.page === pageId);
+            });
+
+            // Initialize chat when switching to the symptom checker page
+            if (pageId === 'symptom-checker' && !chatInitialized) {
+                initializeChat();
+            }
+        }
+
+        /**
+         * Checks if the user has a profile. If so, shows the app. If not, shows the login page.
+         */
+        async function checkUserProfile() {
+            if (!userId) return; // Wait for auth
+            
+            const userDocRef = window.firebase.doc(db, 'artifacts', appId, 'users', userId, 'user_data', 'profile');
+            
+            try {
+                const docSnap = await window.firebase.getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    // User profile exists, show the main app
+                    bottomNav.classList.remove('hidden');
+                    showPage('home');
+                } else {
+                    // No profile, show the login page
+                    bottomNav.classList.add('hidden');
+                    showPage('login-page');
+                }
+            } catch (error) {
+                console.error("Error checking user profile:", error);
+                loginError.textContent = "Could not check user profile. Please try again.";
+                showPage('login-page');
+            }
+        }
+
+        /**
+         * Initializes the chat with a welcome message from the assistant.
+         */
+        function initializeChat() {
+            const welcomeMessage = "Hello! I'm your AI EyeCare Assistant. Describe your symptoms or ask me a question about eye health. \n\n**Please note:** I am an AI, not a doctor. My advice is for informational purposes only. **If this is an emergency, please call 8447877301.**";
+            addChatMessage(welcomeMessage, 'doctor');
+            chatInitialized = true;
+            // The system prompt will be added to the *first* API call, not shown in the chat
+        }
+
+        /**
+         * Handles the submission of the chat form.
+         */
+        async function handleChatSubmit(event) {
+            event.preventDefault();
+            const userQuery = chatInput.value.trim();
+
+            if (!userQuery) return; // Don't send empty messages
+
+            // Add user's message to chat
+            addChatMessage(userQuery, 'patient');
+            chatInput.value = ''; // Clear the input
+
+            // Show a "typing" indicator
+            showLoadingIndicator(true);
+
+            // Get AI response
+            try {
+                const aiResponse = await getAIResponse(userQuery);
+                
+                // Add AI's message to chat
+                addChatMessage(aiResponse.text, 'doctor', aiResponse.sources);
+
+            } catch (error) {
+                console.error("Error getting AI response:", error);
+                addChatMessage("I'm sorry, I seem to be having trouble connecting. Please try again later.", 'doctor');
+            } finally {
+                // Remove "typing" indicator
+                showLoadingIndicator(false);
+            }
+        }
+
+        /**
+         * Handles the submission of the login/patient details form.
+         */
+        async function handleLoginSubmit(event) {
+            event.preventDefault();
+            const patientName = document.getElementById('patient-name').value.trim();
+            const patientMobile = document.getElementById('patient-mobile').value.trim();
+
+            if (!patientName || !patientMobile) {
+                loginError.textContent = 'Please fill out all fields.';
+                return;
+            }
+
+            if (!userId) {
+                loginError.textContent = 'Authentication not ready. Please wait...';
+                return;
+            }
+
+            loginError.textContent = ''; // Clear error
+
+            // Save data to Firestore
+            const userDocRef = window.firebase.doc(db, 'artifacts', appId, 'users', userId, 'user_data', 'profile');
+            
+            try {
+                await window.firebase.setDoc(userDocRef, {
+                    name: patientName,
+                    mobile: patientMobile,
+                    createdAt: new Date().toISOString()
+                });
+
+                // Success! Show the main app.
+                bottomNav.classList.remove('hidden');
+                showPage('home');
+
+            } catch (error) {
+                console.error("Error saving user profile:", error);
+                loginError.textContent = "Failed to save details. Please try again.";
+            }
+        }
+
+        /**
+         * Fetches a response from the Gemini API.
+         */
+        async function getAIResponse(userQuery) {
+            // [FIX] Moved systemPrompt definition inside the function.
+            // This prevents any potential [GLOBAL] parsing errors related
+            // to this large template literal.
+            const systemPrompt = `
+You are an AI-powered EyeCare Triage Assistant. Your role is to provide helpful, general information about eye symptoms and conditions by having a conversation with the user.
+
+**CRITICAL SAFETY RULES:**
+1.  **NOT A DOCTOR:** You are NOT a medical professional. You cannot diagnose conditions or provide treatment plans.
+2.  **PRIORITIZE EMERGENCIES:** If a user mentions symptoms of a medical emergency at **ANY** point (like **sudden vision loss, severe eye pain, seeing flashes of light, a 'curtain' over vision, chemical splash in eye, or major head trauma**), your FIRST AND ONLY action is to **STOP** the conversation and **advise them to seek immediate medical attention by calling 8447877301.**
+3.  **DISCLAIMER FIRST:** Always begin your *very first* response in any new conversation with the following disclaimer: "I am an AI assistant, not a doctor. My advice is for informational purposes only. Please consult a medical professional for a diagnosis or treatment."
+
+**CONVERSATIONAL FLOW (MANDATORY):**
+
+You **MUST** follow this multi-step process:
+
+**STEP 1: GATHER INFORMATION**
+When the user provides their **initial symptom** (e.g., "my eye is red and itchy"), do **NOT** give an answer or explanation immediately.
+Instead, you **MUST** begin asking a series of follow-up questions to gather more information. Ask these questions **one at a time**.
+
+Your questions must cover these key areas:
+* **Onset, Duration, and Progress:** (e.g., "I'm sorry to hear that. When did this redness start?", "Has it been constant or does it come and go?", "Have you noticed it getting better or worse?")
+* **Specifics of the Symptom:** (e.g., "Is there any pain or just itching?", "Is there any discharge? What color?", "Is your vision blurry?")
+* **Relevant Eye History:** (e.g., "Do you wear contact lenses?", "Have you had any eye injuries or surgeries in the past?", "Do you have any known eye conditions?")
+* **Relevant Systemic History:** (e.g., "Do you have any general health conditions I should be aware of, like diabetes, high blood pressure, or allergies?", "Are you taking any new medications?")
+
+**STEP 2: SUMMARIZE AND ANSWER**
+**Only after** you have gathered sufficient information from the user in those categories, you will then provide a final summary.
+
+This summary MUST:
+1.  Start by summarizing the key symptoms the user told you (e.g., "Okay, so just to confirm, you've had a red, itchy right eye for two days, it's watery, and you recently started a new allergy medication.")
+2.  Use Google Search grounding (the \`tools\` provided) to explain what these symptoms *might* commonly be associated with (e.g., "Red, itchy, and watery eyes are often related to allergies (allergic conjunctivitis) or viral conjunctivitis...").
+3.  Provide a clear recommendation on **urgency** (e.g., "Based on what you've said, this does not sound like an immediate emergency, but it's best to get it checked out in the next 1-2 days," or "This sounds non-urgent, but you should monitor it.").
+4.  **ALWAYS** conclude by advising them to **make an appointment with Dr Mandar Kadav at 8447877301** for a proper evaluation, as you are not a doctor and cannot provide a diagnosis.
+`;
+
+            // Add user query to internal history
+            chatHistory.push({ role: "user", parts: [{ text: userQuery }] });
+
+            const payload = {
+                contents: chatHistory,
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                tools: [{ "google_search": {} }] // Enable Google Search grounding
+            };
+
+            // API call with exponential backoff
+            const response = await fetchWithRetry(genAIApiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`API request failed with status ${response.status}`);
+            }
+
+            const result = await response.json();
+            const candidate = result.candidates?.[0];
+
+            if (!candidate || !candidate.content?.parts?.[0]?.text) {
+                throw new Error("Invalid response structure from API.");
+            }
+
+            const aiText = candidate.content.parts[0].text;
+            
+            // Add AI response to internal history
+            chatHistory.push({ role: "model", parts: [{ text: aiText }] });
+
+            // Extract sources
+            let sources = [];
+            const groundingMetadata = candidate.groundingMetadata;
+            if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                sources = groundingMetadata.groundingAttributions
+                    .map(attr => (attr.web?.uri ? { uri: attr.web.uri, title: attr.web.title } : null))
+                    .filter(Boolean); // Filter out any null entries
+            }
+            
+            return { text: aiText, sources: sources };
+        }
+
+        /**
+         * Simple fetch wrapper with exponential backoff.
+         */
+        async function fetchWithRetry(url, options, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429 || response.status >= 500) {
+                        // Throttling or server error, wait and retry
+                        throw new Error(`Retryable status: ${response.status}`);
+                    }
+                    return response; // Success
+                } catch (error) {
+                    if (i === retries - 1) throw error; // Last retry failed
+                    await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+                }
+            }
+        }
+
+        /**
+         * Adds a new message to the chat container.
+         * @param {string} text - The message content (can be HTML).
+         * @param {'patient' | 'doctor'} sender - The sender of the message.
+         * @param {Array<{uri: string, title: string}>} [sources] - Optional array of source objects.
+         */
+        function addChatMessage(text, sender, sources = []) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message'; // For styling links
+            
+            if (sender === 'doctor') {
+                messageDiv.className += " p-3 rounded-lg bg-gray-200 text-gray-800 rounded-bl-none max-w-[90%]";
+                // Basic markdown-to-HTML (bold and newlines)
+                let html = text
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\n/g, '<br>');
+                
+                // Add sources if they exist
+                if (sources.length > 0) {
+                    html += '<br><br><strong class="text-sm">Sources:</strong><ul class="list-disc list-inside text-sm mt-1">';
+                    sources.forEach(source => {
+                        html += `<li><a href="${source.uri}" target="_blank" rel="noopener noreferrer">${source.title || source.uri}</a></li>`;
+                    });
+                    html += '</ul>';
+                }
+                messageDiv.innerHTML = html;
+            } else { // 'patient'
+                messageDiv.className += " p-3 rounded-lg bg-blue-600 text-white rounded-br-none max-w-[90%] self-end";
+                messageDiv.textContent = text;
+            }
+            
+            chatContainer.appendChild(messageDiv);
+            
+            // Auto-scroll to the bottom
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        /**
+         * Shows or hides the loading indicator.
+         */
+        function showLoadingIndicator(show) {
+            const loadingId = 'loading-indicator';
+            let loadingEl = document.getElementById(loadingId);
+
+            if (show) {
+                if (loadingEl) return; // Already showing
+                loadingEl = document.createElement('div');
+                loadingEl.id = loadingId;
+                loadingEl.className = "p-3 rounded-lg bg-gray-200 text-gray-800 rounded-bl-none max-w-[25%] flex space-x-1";
+                loadingEl.innerHTML = `
+                    <div class="w-2 h-2 bg-gray-500 rounded-full loading-dot"></div>
+                    <div class="w-2 h-2 bg-gray-500 rounded-full loading-dot"></div>
+                    <div class="w-2 h-2 bg-gray-500 rounded-full loading-dot"></div>
+                `;
+                chatContainer.appendChild(loadingEl);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            } else {
+                if (loadingEl) {
+                    loadingEl.remove();
+                }
+            }
+        }
+
+        // --- INITIALIZATION ---
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- Initialize Firebase ---
+
+            // 2. Paste your Firebase Config object here
+            // You get this from your Firebase project settings (click </>)
+            // (This replaces the need for the __firebase_config global variable)
+            const firebaseConfig = {
+                apiKey: "AIzaSyBgq1dO3fJkzxUJs7fhoR_BlkhhItxn2HQ",
+                authDomain: "my-eyecare-app.firebaseapp.com",
+                projectId: "my-eyecare-app",
+                storageBucket: "my-eyecare-app.firebasestorage.app",
+                messagingSenderId: "505103559349",
+                appId: "1:505103559349:web:1ff5de198c6b0d38896cfc",
+                measurementId: "G-SSC051GZ4L"
+            }; // <-- Config object pasted in
+
+            // Check if config is still just placeholders
+            if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+                console.warn("Firebase config is not set. Please paste your config object into the script.");
+                document.getElementById('page-content').innerHTML = 
+                    '<div class="p-4 text-red-700 bg-red-100 rounded-lg">Error: Firebase configuration is missing. Please edit this file to add your `firebaseConfig`.</div>';
+                return;
+            }
+
+            try {
+                app = window.firebase.initializeApp(firebaseConfig);
+                auth = window.firebase.getAuth(app);
+                db = window.firebase.getFirestore(app);
+                window.firebase.setLogLevel('Debug');
+                
+                // --- Firebase Auth ---
+                window.firebase.onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        // User is signed in.
+                        userId = user.uid;
+                        console.log("Firebase Auth Success. UserID:", userId);
+                        await checkUserProfile(); // Check if they have a profile
+                    } else {
+                        // User is signed out. Sign them in.
+                        console.log("No user. Attempting anonymous sign-in...");
+                        try {
+                            // Since the 'Globals' panel is not available, we will always
+                            // sign in anonymously.
+                            await window.firebase.signInAnonymously(auth);
+                        } catch (error) {
+                            console.error("Anonymous Sign-In Error:", error);
+                            // Add specific error handling for the most common setup issue
+                            if (error.code === 'auth/configuration-not-found') {
+                                loginError.textContent = "Error: Please enable 'Anonymous Sign-In' in your Firebase Authentication > Sign-in method console.";
+                            } else {
+                                loginError.textContent = "Error connecting to service. Please refresh.";
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Init Error:", error);
+                document.getElementById('page-content').innerHTML = 
+                    '<div class="p-4 text-red-700 bg-red-100 rounded-lg">Error: Could not initialize app. Please check your connection or contact support.</div>';
+                return;
+            }
+
+            // Setup navigation
+            navButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    showPage(button.dataset.page);
+                });
+            });
+
+            // Setup chat form listener
+            chatForm.addEventListener('submit', handleChatSubmit);
+
+            // Setup login form listener
+            loginForm.addEventListener('submit', handleLoginSubmit);
+            
+            // Initial render
+            // showPage('home'); // This is now handled by checkUserProfile()
+        });
+
+    </script>
+</body>
+</html>
